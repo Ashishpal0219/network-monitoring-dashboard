@@ -75,9 +75,8 @@ st.caption(f"A real-time monitoring tool. Last updated: {datetime.now().strftime
 
 # ==============================================================================
 # --- LIVE SYSTEM METRICS (as a self-updating fragment) ---
-# THIS IS THE CORRECTED SECTION
 # ==============================================================================
-@st.fragment(run_every=1)  # <-- THIS TELLS THE FRAGMENT TO RERUN EVERY 1 SECOND
+@st.fragment(run_every=1)
 def live_metrics_fragment():
     """
     This function creates the live metrics tab.
@@ -89,7 +88,6 @@ def live_metrics_fragment():
     st.header("Live Local System Metrics")
     
     # Check for internet connection once (on first run)
-    # This part won't run on subsequent fragment-only reruns
     @st.cache_data
     def check_connection():
         return monitoring.check_internet_connection()
@@ -108,9 +106,6 @@ def live_metrics_fragment():
     disk_kpi = kpi_cols[2].empty()
     
     chart_placeholder = st.empty()
-
-    # --- NO MORE while True: loop ---
-    # This code will now run every 1 second
     
     # 1. Get Metrics
     metrics = monitoring.get_system_metrics()
@@ -130,7 +125,6 @@ def live_metrics_fragment():
     }).set_index('timestamp')
     
     st.session_state.chart_data = pd.concat([st.session_state.chart_data, new_data])
-    # Keep only the last 50 data points for performance
     st.session_state.chart_data = st.session_state.chart_data.tail(50)
 
     # 4. Update UI Elements
@@ -139,14 +133,8 @@ def live_metrics_fragment():
     disk_kpi.metric("Disk Usage", f"{metrics['disk']:.1f} %")
     
     chart_placeholder.line_chart(st.session_state.chart_data)
-    
-    # --- NO MORE time.sleep(1) ---
-
 
 # ==============================================================================
-# --- CREATE TABS ---
-# ==============================================================================
-
 # --- CREATE TABS ---
 # ==============================================================================
 
@@ -164,7 +152,6 @@ with tab_live:
 
 # ==============================================================================
 # --- NETWORK TOOLS TAB --- 
-# This code will now be reached and will work correctly.
 # ==============================================================================
 with tab_tools:
     st.header("Network Diagnostic Tools")
@@ -221,14 +208,15 @@ with tab_tools:
                             'Port': ports_to_scan,
                             'Status': ['Open' if p in open_ports else 'Closed' for p in ports_to_scan]
                         }).set_index('Port')
-                        st.dataframe(scan_df, use_container_width=True)
+                        
+                        # --- FIX for use_container_width ---
+                        st.dataframe(scan_df, width='stretch')
             else:
                 st.error("Invalid hostname or IP address.")
 
 
 # ==============================================================================
 # --- LOG HISTORY & REPORTS TAB ---
-# This code will also be reached and will work correctly.
 # ==============================================================================
 with tab_history:
     st.header("Log History & Reporting")
@@ -239,8 +227,6 @@ with tab_history:
         key="log_select"
     )
     
-    # --- FIX for Button Duplication ---
-    # Create a clean key by removing spaces and making it lowercase
     log_type_key = log_type.lower().replace(' ', '_')
     
     st.subheader(f"{log_type} Logs")
@@ -251,8 +237,6 @@ with tab_history:
     if log_type == "System Metrics":
         df_logs = database.fetch_logs("system_logs", limit=200)
         if not df_logs.empty:
-            # --- FIX for KeyError ---
-            # Use the correct database column names
             st.line_chart(df_logs[['cpu_percent', 'memory_percent', 'disk_percent']])
             
     elif log_type == "Ping Results":
@@ -263,7 +247,8 @@ with tab_history:
 
     # 2. Display data in a table
     if not df_logs.empty:
-        st.dataframe(df_logs, use_container_width=True)
+        # --- FIX for use_container_width ---
+        st.dataframe(df_logs, width='stretch')
 
         # 3. Exporting Section
         st.subheader("Export Current View")
@@ -294,9 +279,9 @@ with tab_history:
             )
     else:
         st.info("No logs found for this category. Try running some tests in the 'Network Tools' tab.")
+
 # ==============================================================================
 # --- UPTIME MONITOR TAB ---
-# This code runs as a separate fragment and updates every 60 seconds.
 # ==============================================================================
 @st.fragment(run_every=60)
 def uptime_monitor_fragment():
@@ -354,7 +339,14 @@ def uptime_monitor_fragment():
 
     # Display the results in a table
     df_results = pd.DataFrame(results)
-    status_placeholder.dataframe(df_results, use_container_width=True)
+    
+    # --- FIX for ArrowInvalid ---
+    # Convert 'Latency (ms)' to object type so it can hold 'N/A' and numbers
+    if "Latency (ms)" in df_results.columns:
+        df_results["Latency (ms)"] = df_results["Latency (ms)"].astype(object)
+    
+    # --- FIX for use_container_width ---
+    status_placeholder.dataframe(df_results, width='stretch')
 
 # ---
 # This is the code that *runs* the fragment in the tab
